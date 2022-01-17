@@ -40,7 +40,14 @@ const SignUpPage = () => {
       password,
     };
 
-    axios.post('/api/1.0/users', body);
+    // axios.post('/api/1.0/users', body);
+    fetch('/api/1.0/users', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
     setObjData({ ...initialState });
   };
 
@@ -54,7 +61,7 @@ const SignUpPage = () => {
         <h1 className='text-center'>Sign Up</h1>
 
         <div className='mb-3'>
-          <label htmlFor='Username'>E-mail</label>
+          <label htmlFor='username'>Username</label>
           <input id='username' value={username} onChange={inputOnChange} />
         </div>
 
