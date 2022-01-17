@@ -2,6 +2,8 @@ import SignUpPage from './SignUpPage.jsx';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axios from 'axios';
+import { setupServer } from 'msw/node';
+import { rest } from 'msw';
 
 describe('Sign Up Page', () => {
   describe('Layout', () => {
@@ -67,26 +69,35 @@ describe('Sign Up Page', () => {
 
   describe('check when user clicks sign up button all the data sent to backend', () => {
     it('sends username, email, password to backend', () => {
+      let requestBody;
+      const server = setupServer(
+        rest.post('api/1.0/users', (req, res, ctx) => {
+          requestBody = req.body;
+          return res(ctx.status(200));
+        })
+      );
+      server.listen();
+
       render(<SignUpPage />);
       const username = screen.getByLabelText('Username');
       const email = screen.getByLabelText('E-mail');
       const password = screen.getByLabelText('Password');
       const passwordRepeat = screen.getByLabelText('Password Repeat');
-      const button = screen.queryByRole('button', { name: 'Sign Up' });
 
       userEvent.type(username, 'user1');
       userEvent.type(email, 'user1@mail.com');
       userEvent.type(password, 'P4ssword');
       userEvent.type(passwordRepeat, 'P4ssword');
+      const button = screen.queryByRole('button', { name: 'Sign Up' });
+      userEvent.click(button);
 
       const mockFn = jest.fn();
 
-      axios.post = mockFn;
+      // axios.post = mockFn;
+      // window.fetch = mockFn;
+      // const firstCallOfMockFunction = mockFn.mock.calls[0];
 
-      userEvent.click(button);
-      const firstCallOfMockFunction = mockFn.mock.calls[0];
-
-      const body = firstCallOfMockFunction[1];
+      // const body = JSON.parse(firstCallOfMockFunction[1].body);
 
       expect(body).toEqual({
         username: 'user1',
