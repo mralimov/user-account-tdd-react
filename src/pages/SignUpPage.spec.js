@@ -1,5 +1,5 @@
 import SignUpPage from './SignUpPage.jsx';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axios from 'axios';
 import { setupServer } from 'msw/node';
@@ -54,30 +54,24 @@ describe('Sign Up Page', () => {
       expect(button).toBeDisabled();
     });
   });
+
   describe('check sign up button anabled when password and password retype match', () => {
-    it('has signup button enabled', () => {
-      render(<SignUpPage />);
-      const passwordInput = screen.getByLabelText('Password');
-      const passwordRepeatInput = screen.getByLabelText('Password Repeat');
-      userEvent.type(passwordInput, 'P4ssword');
-      userEvent.type(passwordRepeatInput, 'P4ssword');
+    let counter = 0;
+    let requestBody;
+    const server = setupServer(
+      rest.post('/api/1.0/users', (req, res, ctx) => {
+        requestBody = req.body;
+        counter += 1;
+        return res(ctx.status(200));
+      })
+    );
 
-      const button = screen.queryByRole('button', { name: 'Sign Up' });
-      expect(button).toBeEnabled();
-    });
-  });
+    beforeEach(() => (counter = 0));
+    beforeAll(() => server.listen());
+    afterAll(() => server.close());
 
-  describe('check when user clicks sign up button all the data sent to backend', () => {
-    it('sends username, email, password to backend', () => {
-      let requestBody;
-      const server = setupServer(
-        rest.post('api/1.0/users', (req, res, ctx) => {
-          requestBody = req.body;
-          return res(ctx.status(200));
-        })
-      );
-      server.listen();
-
+    let button;
+    const setup = () => {
       render(<SignUpPage />);
       const username = screen.getByLabelText('Username');
       const email = screen.getByLabelText('E-mail');
@@ -88,21 +82,91 @@ describe('Sign Up Page', () => {
       userEvent.type(email, 'user1@mail.com');
       userEvent.type(password, 'P4ssword');
       userEvent.type(passwordRepeat, 'P4ssword');
+      button = screen.queryByRole('button', { name: 'Sign Up' });
+    };
+
+    it('has signup button enabled', () => {
+      render(<SignUpPage />);
+      const passwordInput = screen.getByLabelText('Password');
+      const passwordRepeatInput = screen.getByLabelText('Password Repeat');
+      userEvent.type(passwordInput, 'P4ssword');
+      userEvent.type(passwordRepeatInput, 'P4ssword');
+
       const button = screen.queryByRole('button', { name: 'Sign Up' });
-      userEvent.click(button);
+      expect(button).toBeEnabled();
+    });
 
-      const mockFn = jest.fn();
+    describe('check when user clicks sign up button all the data sent to backend', () => {
+      it('sends username, email, password to backend', async () => {
+        setup();
+        userEvent.click(button);
 
-      // axios.post = mockFn;
-      // window.fetch = mockFn;
-      // const firstCallOfMockFunction = mockFn.mock.calls[0];
+        await screen.findByText(
+          'Please check your e-mail to activate your account'
+        );
+        expect(requestBody).toEqual({
+          username: 'user1',
+          email: 'user1@mail.com',
+          password: 'P4ssword',
+        });
+      });
 
-      // const body = JSON.parse(firstCallOfMockFunction[1].body);
+      it('disables sign up button if backend looding', async () => {
+        setup();
+        userEvent.click(button);
+        userEvent.click(button);
 
-      expect(body).toEqual({
-        username: 'user1',
-        email: 'user1@mail.com',
-        password: 'P4ssword',
+        await screen.findByText(
+          'Please check your e-mail to activate your account'
+        );
+        expect(counter).toBe(1);
+      });
+
+      it('displays spinner after clicking the submit', async () => {
+        setup();
+        expect(screen.queryByRole('status')).not.toBeInTheDocument();
+        userEvent.click(button);
+        const spinner = screen.getByRole('status');
+
+        expect(spinner).toBeInTheDocument();
+        await screen.findByText(
+          'Please check your e-mail to activate your account'
+        );
+      });
+      it('show account verification notification after successfully sign up form', async () => {
+        setup();
+        userEvent.click(button);
+        const text = await screen.findByText(
+          'Please check your e-mail to activate your account'
+        );
+
+        expect(text).toBeInTheDocument();
+      });
+      it('hides sign up form after successfully sign up', async () => {
+        setup();
+        const form = screen.getByTestId('form-sign-up');
+        userEvent.click(button);
+        await waitFor(() => {
+          expect(form).not.toBeInTheDocument();
+        });
+      });
+      it('displays validation message for username', async () => {
+        server.use(
+          rest.post('/api/1.0/users', (req, res, ctx) => {
+            return res(
+              ctx.status(400),
+              ctx.json({
+                validationErrors: { username: 'Username cannot be null' },
+              })
+            );
+          })
+        );
+        setup();
+        userEvent.click(button);
+        const validationError = await screen.findByText(
+          'Username cannot be null'
+        );
+        expect(validationError).toBeInTheDocument();
       });
     });
   });
